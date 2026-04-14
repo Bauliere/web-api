@@ -1,169 +1,287 @@
 /**
- * Web-API — app.js
- * Consume la API pública de ipify para obtener la IP del cliente.
- * Usa fetch con async/await, manejo de errores y estados visuales.
+ * Web-API v2 — app.js
+ * 1. Obtiene la IP pública desde ipify.
+ * 2. Usa esa IP para consultar ipgeolocation.io (v3).
+ * 3. Muestra continente, ciudad, país y hora local.
+ * 4. Imprime toda la info de geolocation en console.log.
+ * 5. Cicla entre 3 temas con un botón único.
  */
 
 // === Constantes ===
-const API_URL = 'https://api.ipify.org?format=json';
+const IPIFY_URL = 'https://api.ipify.org?format=json';
+const GEO_API_KEY = '6178dbf74ada4505a763acd4769729b7';
+const GEO_BASE = 'https://api.ipgeolocation.io/v3/ipgeo';
+
+// === Temas: orden de ciclo ===
+const THEMES = [
+  { id: 'sakura', label: 'Sakura', icon: 'sun' },
+  { id: 'ember',  label: 'Ember',  icon: 'flame' },
+  { id: 'neon',   label: 'Neon',   icon: 'zap' },
+];
 
 // === Elementos del DOM ===
-const elements = {
-  ipValue: document.getElementById('ipValue'),
-  skeleton: document.getElementById('skeleton'),
-  statusBar: document.getElementById('statusBar'),
-  statusText: document.getElementById('statusText'),
-  lastFetch: document.getElementById('lastFetch'),
-  btnRefresh: document.getElementById('btnRefresh'),
+const el = {
+  ipValue:      document.getElementById('ipValue'),
+  skeleton:     document.getElementById('skeleton'),
+  statusBar:    document.getElementById('statusBar'),
+  statusText:   document.getElementById('statusText'),
+  btnRefresh:   document.getElementById('btnRefresh'),
+  themeToggle:  document.getElementById('themeToggle'),
+  themeLabel:   document.getElementById('themeLabel'),
+  // Geo elements
+  geoContinent: document.getElementById('geoContinent'),
+  geoCity:      document.getElementById('geoCity'),
+  geoCountry:   document.getElementById('geoCountry'),
+  geoTime:      document.getElementById('geoTime'),
+  geoISP:       document.getElementById('geoISP'),
+  geoTimezone:  document.getElementById('geoTimezone'),
+  geoCurrency:  document.getElementById('geoCurrency'),
+  countryFlag:  document.getElementById('countryFlag'),
+  countryEmoji: document.getElementById('countryEmoji'),
+  particles:    document.getElementById('particles'),
 };
 
-// === Estado de la aplicación ===
+// === Estado ===
 let isFetching = false;
+let currentThemeIndex = 0;
 
-/**
- * Actualiza el indicador de estado visual.
- * @param {'loading' | 'success' | 'error'} status
- * @param {string} message
- */
+// =====================
+// Utilidades
+// =====================
+
+/** Actualiza el indicador de estado */
 function setStatus(status, message) {
-  elements.statusBar.setAttribute('data-status', status);
-  elements.statusText.textContent = message;
+  el.statusBar.setAttribute('data-status', status);
+  el.statusText.textContent = message;
 }
 
-/**
- * Formatea la hora actual en formato legible.
- * @returns {string}
- */
-function getFormattedTime() {
+/** Formatea hora legible */
+function formatTime() {
   return new Intl.DateTimeFormat('es-MX', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   }).format(new Date());
 }
 
+/** Resetea los campos geo al estado inicial */
+function resetGeoFields() {
+  const dash = '—';
+  el.geoContinent.textContent = dash;
+  el.geoCity.textContent = dash;
+  el.geoCountry.textContent = dash;
+  el.geoTime.textContent = dash;
+  el.geoISP.textContent = dash;
+  el.geoTimezone.textContent = dash;
+  el.geoCurrency.textContent = dash;
+  el.countryFlag.style.display = 'none';
+  el.countryEmoji.textContent = '';
+}
+
+// =====================
+// API: Obtener IP + Geolocation
+// =====================
+
 /**
- * Obtiene la IP pública del cliente desde la API de ipify.
- * Muestra el resultado en el DOM y en la consola.
+ * Obtiene la IP desde ipify y luego consulta ipgeolocation.io.
+ * Muestra los datos en el DOM e imprime en console.log.
  */
-async function fetchIP() {
-  // Evitar múltiples peticiones simultáneas
+async function fetchIPAndGeo() {
   if (isFetching) return;
   isFetching = true;
 
-  // Preparar UI: mostrar skeleton, ocultar IP anterior
-  elements.skeleton.classList.remove('hidden');
-  elements.ipValue.classList.remove('visible', 'error-message');
-  elements.ipValue.textContent = '';
-  elements.btnRefresh.disabled = true;
-  elements.btnRefresh.classList.add('loading');
-  setStatus('loading', 'Conectando...');
+  // Reset UI
+  el.skeleton.classList.remove('hidden');
+  el.ipValue.classList.remove('visible', 'error-message');
+  el.ipValue.textContent = '';
+  el.btnRefresh.disabled = true;
+  el.btnRefresh.classList.add('loading');
+  resetGeoFields();
+  setStatus('loading', 'Obteniendo IP...');
 
   try {
-    // Consumir la API con fetch
-    const response = await fetch(API_URL);
+    // --- Paso 1: Obtener IP de ipify ---
+    const ipResponse = await fetch(IPIFY_URL);
+    if (!ipResponse.ok) throw new Error(`ipify HTTP ${ipResponse.status}`);
 
-    // Verificar que la respuesta sea exitosa
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
+    const ipData = await ipResponse.json();
+    const ip = ipData.ip;
+    if (!ip) throw new Error('ipify no retornó la propiedad "ip".');
 
-    // Procesar la respuesta JSON
-    const data = await response.json();
-    const ip = data.ip;
-
-    // Validar que la propiedad "ip" exista
-    if (!ip) {
-      throw new Error('La respuesta no contiene la propiedad "ip".');
-    }
-
-    // Imprimir la IP en la consola
     console.log(`[Web-API] IP pública obtenida: ${ip}`);
 
-    // Ocultar skeleton y mostrar IP con animación
-    elements.skeleton.classList.add('hidden');
-    elements.ipValue.textContent = ip;
-    elements.ipValue.classList.remove('error-message');
+    // Mostrar IP en la interfaz
+    el.skeleton.classList.add('hidden');
+    el.ipValue.textContent = ip;
+    el.ipValue.classList.remove('error-message');
+    requestAnimationFrame(() => el.ipValue.classList.add('visible'));
 
-    // Trigger animation frame para la transición
-    requestAnimationFrame(() => {
-      elements.ipValue.classList.add('visible');
-    });
+    setStatus('loading', 'Obteniendo geolocalización...');
 
-    // Actualizar estado y timestamp
-    setStatus('success', 'IP obtenida');
-    elements.lastFetch.textContent = getFormattedTime();
+    // --- Paso 2: Consultar geolocation con esa IP ---
+    const geoUrl = `${GEO_BASE}?apiKey=${GEO_API_KEY}&ip=${ip}`;
+    const geoResponse = await fetch(geoUrl);
+    if (!geoResponse.ok) throw new Error(`Geolocation HTTP ${geoResponse.status}`);
+
+    const geo = await geoResponse.json();
+
+    // Imprimir toda la respuesta de geolocation en consola
+    console.log('[Web-API] Datos de geolocalización completos:');
+    console.log(geo);
+
+    // --- Paso 3: Extraer y mostrar datos ---
+    const location = geo.location || {};
+    const timezone = geo.time_zone || {};
+    const currency = geo.currency || {};
+    const asn = geo.asn || {};
+
+    // Continente
+    el.geoContinent.textContent = location.continent_name || '—';
+
+    // Ciudad
+    el.geoCity.textContent = location.city || '—';
+
+    // País
+    el.geoCountry.textContent = location.country_name || '—';
+
+    // Hora local del destino
+    if (timezone.current_time) {
+      // Formato: "2026-03-07 10:37:38.987+0100"
+      const timePart = timezone.current_time.split(' ')[1];
+      // Tomar solo HH:MM:SS
+      const cleanTime = timePart ? timePart.substring(0, 8) : '—';
+      el.geoTime.textContent = cleanTime;
+    }
+
+    // ISP / Organización
+    el.geoISP.textContent = asn.organization || '—';
+
+    // Zona horaria
+    el.geoTimezone.textContent = timezone.name || '—';
+
+    // Moneda
+    if (currency.code && currency.symbol) {
+      el.geoCurrency.textContent = `${currency.code} (${currency.symbol})`;
+    } else {
+      el.geoCurrency.textContent = currency.code || '—';
+    }
+
+    // Bandera del país
+    if (location.country_flag) {
+      el.countryFlag.src = location.country_flag;
+      el.countryFlag.alt = `Bandera de ${location.country_name || ''}`;
+      el.countryFlag.style.display = 'block';
+    }
+
+    // Emoji del país
+    if (location.country_emoji) {
+      el.countryEmoji.textContent = location.country_emoji;
+    }
+
+    // Logs adicionales formateados
+    console.log(`[Web-API] Continente: ${location.continent_name}`);
+    console.log(`[Web-API] Ciudad: ${location.city}`);
+    console.log(`[Web-API] País: ${location.country_name}`);
+    console.log(`[Web-API] Hora local: ${timezone.current_time}`);
+    console.log(`[Web-API] ISP: ${asn.organization}`);
+    console.log(`[Web-API] Zona horaria: ${timezone.name}`);
+    console.log(`[Web-API] Moneda: ${currency.code} (${currency.symbol})`);
+
+    setStatus('success', 'Datos obtenidos');
 
   } catch (error) {
-    // Imprimir error en consola
-    console.error('[Web-API] Error al obtener la IP:', error.message);
+    console.error('[Web-API] Error:', error.message);
 
-    // Ocultar skeleton y mostrar mensaje de error
-    elements.skeleton.classList.add('hidden');
-    elements.ipValue.textContent = 'No se pudo obtener la IP';
-    elements.ipValue.classList.add('error-message');
+    el.skeleton.classList.add('hidden');
 
-    requestAnimationFrame(() => {
-      elements.ipValue.classList.add('visible');
-    });
+    // Si no tenemos IP aún, mostrar error ahí
+    if (!el.ipValue.textContent) {
+      el.ipValue.textContent = 'No se pudo obtener la información';
+      el.ipValue.classList.add('error-message');
+      requestAnimationFrame(() => el.ipValue.classList.add('visible'));
+    }
 
     setStatus('error', 'Error de conexión');
-    elements.lastFetch.textContent = getFormattedTime();
 
   } finally {
-    // Rehabilitar el botón de refresh
     isFetching = false;
-    elements.btnRefresh.disabled = false;
-    elements.btnRefresh.classList.remove('loading');
+    el.btnRefresh.disabled = false;
+    el.btnRefresh.classList.remove('loading');
   }
 }
 
-// === Event Listeners ===
+// =====================
+// Temas: Ciclo con botón único
+// =====================
 
-// Botón "Actualizar IP" reutiliza la misma función
-elements.btnRefresh.addEventListener('click', fetchIP);
-
-// === Inicialización ===
-// Obtener la IP automáticamente al cargar la página
-document.addEventListener('DOMContentLoaded', fetchIP);
-
-// === Dark/Light Mode Toggle ===
-(function initThemeToggle() {
-  const toggle = document.querySelector('[data-theme-toggle]');
+/** Aplica el tema por índice */
+function applyTheme(index) {
+  const theme = THEMES[index];
   const root = document.documentElement;
 
-  // Detectar preferencia del sistema
-  let currentTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light';
+  // Flash visual al cambiar
+  const flash = document.createElement('div');
+  flash.className = 'theme-flash';
+  document.body.appendChild(flash);
+  flash.addEventListener('animationend', () => flash.remove());
 
-  root.setAttribute('data-theme', currentTheme);
-  updateToggleIcon(toggle, currentTheme);
+  // Aplicar tema
+  root.setAttribute('data-theme', theme.id);
+  el.themeLabel.textContent = theme.label;
 
-  if (toggle) {
-    toggle.addEventListener('click', () => {
-      currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
-      root.setAttribute('data-theme', currentTheme);
-      toggle.setAttribute(
-        'aria-label',
-        `Cambiar a modo ${currentTheme === 'dark' ? 'claro' : 'oscuro'}`
-      );
-      updateToggleIcon(toggle, currentTheme);
-    });
+  // Actualizar ícono según tema
+  const icons = {
+    sun: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>',
+    flame: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>',
+    zap: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+  };
+
+  const iconEl = el.themeToggle.querySelector('.theme-icon');
+  if (iconEl) {
+    iconEl.outerHTML = `<span class="theme-icon">${icons[theme.icon]}</span>`;
   }
-})();
 
-/**
- * Actualiza el ícono del toggle de tema.
- * @param {HTMLElement} toggle
- * @param {'light' | 'dark'} theme
- */
-function updateToggleIcon(toggle, theme) {
-  if (!toggle) return;
-
-  // Sol para modo oscuro (cambiar a claro), luna para modo claro (cambiar a oscuro)
-  toggle.innerHTML = theme === 'dark'
-    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
-    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  // Recrear partículas con nuevo color
+  createParticles();
 }
+
+/** Cicla al siguiente tema */
+function cycleTheme() {
+  currentThemeIndex = (currentThemeIndex + 1) % THEMES.length;
+  applyTheme(currentThemeIndex);
+}
+
+// =====================
+// Partículas decorativas
+// =====================
+
+function createParticles() {
+  el.particles.innerHTML = '';
+  const count = window.innerWidth < 768 ? 8 : 15;
+
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = Math.random() * 6 + 3;
+    p.style.width = `${size}px`;
+    p.style.height = `${size}px`;
+    p.style.left = `${Math.random() * 100}%`;
+    p.style.animationDuration = `${Math.random() * 15 + 10}s`;
+    p.style.animationDelay = `${Math.random() * 10}s`;
+    el.particles.appendChild(p);
+  }
+}
+
+// =====================
+// Event Listeners
+// =====================
+
+el.btnRefresh.addEventListener('click', fetchIPAndGeo);
+el.themeToggle.addEventListener('click', cycleTheme);
+
+// =====================
+// Inicialización
+// =====================
+
+document.addEventListener('DOMContentLoaded', () => {
+  applyTheme(currentThemeIndex);
+  fetchIPAndGeo();
+});

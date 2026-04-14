@@ -1,12 +1,15 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="dark">
+<html lang="es" data-theme="sakura">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Web-API — IP Monitor</title>
-  <meta name="description" content="Consulta tu dirección IP pública en tiempo real usando la API de ipify.">
+  <title>Web-API — IP Geolocation</title>
+  <meta name="description" content="Consulta tu IP pública y geolocalización en tiempo real.">
 
-  <!-- Fonts: JetBrains Mono (display/mono) + Inter (body) — tech aesthetic -->
+  <!-- Favicon — espacio reservado para Dante.jpeg -->
+  <link rel="icon" type="image/jpeg" href="assets/img/Dante.jpeg">
+
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,84 +18,126 @@
 </head>
 <body>
 
+  <!-- Floating particles background -->
+  <div class="particles" id="particles" aria-hidden="true"></div>
+
   <!-- Header -->
   <header class="header">
     <div class="header-inner">
       <div class="logo-group">
-        <!-- Inline SVG Logo: stylized network node -->
-        <svg class="logo-icon" width="32" height="32" viewBox="0 0 32 32" fill="none" aria-label="Web-API logo">
-          <circle cx="16" cy="16" r="6" stroke="currentColor" stroke-width="2"/>
-          <circle cx="16" cy="16" r="2.5" fill="currentColor"/>
-          <line x1="16" y1="2" x2="16" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="16" y1="22" x2="16" y2="30" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="2" y1="16" x2="10" y2="16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="22" y1="16" x2="30" y2="16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <circle cx="16" cy="2" r="2" fill="currentColor" opacity="0.5"/>
-          <circle cx="16" cy="30" r="2" fill="currentColor" opacity="0.5"/>
-          <circle cx="2" cy="16" r="2" fill="currentColor" opacity="0.5"/>
-          <circle cx="30" cy="16" r="2" fill="currentColor" opacity="0.5"/>
-        </svg>
+        <!-- Avatar: Dante.jpeg -->
+        <div class="logo-avatar">
+          <img src="assets/img/Dante.jpeg" alt="Dante — Mascota del proyecto" width="38" height="38">
+        </div>
         <div>
           <h1 class="logo-text">Web-API</h1>
-          <p class="logo-subtitle">IP Monitor</p>
+          <p class="logo-subtitle">IP Geolocation</p>
         </div>
       </div>
-      <button class="theme-toggle" data-theme-toggle aria-label="Cambiar a modo claro">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-        </svg>
-      </button>
+      <div class="header-actions">
+        <!-- Theme cycle button (single button, 3 themes) -->
+        <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema">
+          <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+          </svg>
+          <span class="theme-label" id="themeLabel">Sakura</span>
+        </button>
+      </div>
     </div>
   </header>
 
   <!-- Main Content -->
   <main class="main">
 
-    <!-- Hero Description -->
-    <section class="hero-section">
+    <!-- Hero -->
+    <section class="hero-section animate-in">
       <p class="hero-description">
-        Obtén tu dirección IP pública en tiempo real consumiendo la API de
-        <a href="https://www.ipify.org" target="_blank" rel="noopener noreferrer">ipify</a>.
+        Obtén tu IP pública y datos de geolocalización en tiempo real usando
+        <a href="https://www.ipify.org" target="_blank" rel="noopener noreferrer">ipify</a> y
+        <a href="https://ipgeolocation.io" target="_blank" rel="noopener noreferrer">IP Geolocation API</a>.
       </p>
     </section>
 
-    <!-- IP Card -->
+    <!-- IP Card Principal -->
     <section class="ip-section">
-      <div class="ip-card" id="ipCard">
+      <div class="ip-card animate-in" id="ipCard">
 
         <!-- Status Indicator -->
-        <div class="status-bar" id="statusBar">
-          <span class="status-dot" id="statusDot"></span>
+        <div class="status-bar" id="statusBar" data-status="loading">
+          <span class="status-dot"></span>
           <span class="status-text" id="statusText">Inicializando</span>
         </div>
 
         <!-- IP Display -->
-        <div class="ip-display" id="ipDisplay">
-          <!-- Skeleton loader (shown while fetching) -->
+        <div class="ip-display">
           <div class="skeleton-loader" id="skeleton">
             <div class="skeleton skeleton-ip"></div>
           </div>
-          <!-- IP value (hidden until loaded) -->
           <p class="ip-value" id="ipValue" aria-live="polite"></p>
         </div>
-
-        <!-- Label -->
         <p class="ip-label">Dirección IPv4 Pública</p>
 
-        <!-- Metadata -->
+        <!-- Geo Info Grid -->
+        <div class="geo-grid" id="geoGrid">
+          <div class="geo-item animate-in" style="--delay: 0.1s">
+            <div class="geo-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            </div>
+            <div class="geo-content">
+              <span class="geo-label">Continente</span>
+              <span class="geo-value" id="geoContinent">—</span>
+            </div>
+          </div>
+          <div class="geo-item animate-in" style="--delay: 0.15s">
+            <div class="geo-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            </div>
+            <div class="geo-content">
+              <span class="geo-label">Ciudad</span>
+              <span class="geo-value" id="geoCity">—</span>
+            </div>
+          </div>
+          <div class="geo-item animate-in" style="--delay: 0.2s">
+            <div class="geo-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+            </div>
+            <div class="geo-content">
+              <span class="geo-label">País</span>
+              <span class="geo-value" id="geoCountry">—</span>
+            </div>
+          </div>
+          <div class="geo-item animate-in" style="--delay: 0.25s">
+            <div class="geo-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="geo-content">
+              <span class="geo-label">Hora local</span>
+              <span class="geo-value" id="geoTime">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Extra Metadata -->
         <div class="ip-meta" id="ipMeta">
           <div class="meta-item">
-            <span class="meta-label">Endpoint</span>
-            <code class="meta-value">api.ipify.org</code>
+            <span class="meta-label">ISP</span>
+            <span class="meta-value" id="geoISP">—</span>
           </div>
           <div class="meta-item">
-            <span class="meta-label">Formato</span>
-            <code class="meta-value">JSON</code>
+            <span class="meta-label">Zona horaria</span>
+            <span class="meta-value" id="geoTimezone">—</span>
           </div>
           <div class="meta-item">
-            <span class="meta-label">Última consulta</span>
-            <span class="meta-value" id="lastFetch">—</span>
+            <span class="meta-label">Moneda</span>
+            <span class="meta-value" id="geoCurrency">—</span>
           </div>
+        </div>
+
+        <!-- Country flag + emoji -->
+        <div class="country-flag-row" id="countryFlagRow">
+          <img class="country-flag" id="countryFlag" src="" alt="" width="32" height="32" style="display:none;">
+          <span class="country-emoji" id="countryEmoji"></span>
         </div>
 
         <!-- Refresh Button -->
@@ -101,40 +146,34 @@
             <polyline points="23 4 23 10 17 10"/>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
           </svg>
-          <span>Actualizar IP</span>
+          <span>Actualizar</span>
         </button>
       </div>
     </section>
 
-    <!-- API Info -->
+    <!-- Info Cards -->
     <section class="info-section">
       <div class="info-grid">
-        <div class="info-card">
+        <div class="info-card animate-in" style="--delay: 0.1s">
           <div class="info-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            </svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </div>
           <h3 class="info-title">Seguro</h3>
-          <p class="info-text">Conexión HTTPS directa sin intermediarios ni rastreadores.</p>
+          <p class="info-text">HTTPS directo. Sin intermediarios ni rastreadores.</p>
         </div>
-        <div class="info-card">
+        <div class="info-card animate-in" style="--delay: 0.2s">
           <div class="info-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-            </svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           </div>
           <h3 class="info-title">Tiempo real</h3>
-          <p class="info-text">Cada consulta obtiene la IP actual, sin caché ni almacenamiento.</p>
+          <p class="info-text">IP y geolocalización actualizadas al instante.</p>
         </div>
-        <div class="info-card">
+        <div class="info-card animate-in" style="--delay: 0.3s">
           <div class="info-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 20V10M12 20V4M6 20v-6"/>
-            </svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
           </div>
           <h3 class="info-title">Sin backend</h3>
-          <p class="info-text">100% cliente. Vanilla JS con fetch y async/await.</p>
+          <p class="info-text">100% cliente. Vanilla JS, fetch y async/await.</p>
         </div>
       </div>
     </section>
@@ -143,7 +182,10 @@
 
   <!-- Footer -->
   <footer class="footer">
-    <p>Web-API &middot; Construido con HTML, CSS y JavaScript vanilla &middot; API por <a href="https://www.ipify.org" target="_blank" rel="noopener noreferrer">ipify.org</a></p>
+    <p>Web-API &middot; HTML, CSS &amp; JS vanilla &middot; APIs por
+      <a href="https://www.ipify.org" target="_blank" rel="noopener noreferrer">ipify</a> &amp;
+      <a href="https://ipgeolocation.io" target="_blank" rel="noopener noreferrer">ipgeolocation.io</a>
+    </p>
   </footer>
 
   <script src="assets/js/app.js"></script>
